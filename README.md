@@ -4,19 +4,24 @@ Promptor 是一个本地运行的 Prompt 编排与管理工具，面向使用 Cu
 
 它不是聊天工具，也不是简单的 prompt 润色器。它是一个 **Prompt Operating System**：把模糊需求转换成高质量的结构化 prompt、阶段化 workflow、上下文摘要和记忆状态，减少 token 浪费，提高 agent 产出质量。
 
-每个 Session 提供两大核心能力：
-- **阶段工作流** — 按 Research → Plan → Annotation → Implement → Verify 流程生成高质量 prompt
-- **Prompt 精炼** — 基于当前会话的记忆、文件和上下文，把粗糙 prompt 转化为结构化 prompt
+每个 Session 是一个统一工作区，包含两大并列核心能力：
 
+| 模式 | 说明 |
+|------|------|
+| **⚡ 阶段工作流** | 按 Research → Plan → Annotation → Implement → Verify 流程，为每个阶段生成高质量 prompt |
+| **✨ Prompt 精炼** | 基于**整个会话**的对话历史、上传文件、关键记忆和已确认约束，把粗糙 prompt 转化为结构化 prompt |
+
+Prompt 精炼不依附于某个阶段——它是 Session 级能力，可选关联某个阶段来偏向特定需求。
 
 ## 核心特性
 
+- **统一 Session 工作区** — 阶段工作流与 Prompt 精炼并列，共享同一会话的记忆、文件和上下文
 - **阶段化工作流** — 固定 8 阶段流程（Research → Plan → Annotation Loop → Implement → Verify + 辅助阶段），每个阶段有明确的产物文件和不可变要求
+- **Session 级 Prompt 精炼** — 使用整个会话的对话记录、上传文件、固定事实和滚动摘要进行精炼，支持可选的阶段关联偏向
 - **Prompt 编排** — 7 层合约体系（Behavior / Task / Stage / Output / Failure / Repair / Variant），内置 14 个 prompt 模板
 - **Base-preserving 优化** — 优化 prompt 时保留阶段基础模板的核心要求，仅做聚焦和上下文增强，不做自由重写
 - **文件驱动** — 上传 research.md / plan.md / test-report.md 等阶段产物文件，自动纳入 prompt 生成上下文
-- **两模式工作区** — 每个阶段提供「优化 Prompt」和「审阅阶段文件」两种工作模式
-- **会话级 Prompt 精炼** — Prompt Refiner 与工作流共享同一会话的记忆、文件和上下文，不是孤立功能
+- **两模式阶段工作区** — 每个阶段提供「优化 Prompt」和「审阅阶段文件」两种工作模式
 - **记忆系统** — 4 层记忆（Raw History / Rolling Summary / Pinned Facts / Stage Artifacts），支持上下文压缩
 - **弱模型兼容** — 所有模板为低能力模型优化，输出结构固定、校验修复自动化
 - **本地优先** — 无后端，数据存储在浏览器 IndexedDB，API key 不离开本地
@@ -50,7 +55,8 @@ npm run dev
 2. 选择 Provider Preset（OpenAI / DeepSeek / GLM / Gemini / Custom）
 3. 填入 API Key
 4. 点击 Test Connection 验证连接
-5. 回到主页创建新 Session，进入统一工作区。在工作区中切换「阶段工作流」和「Prompt 精炼」两种模式
+5. 回到主页创建新 Session，进入统一工作区
+6. 顶部切换「⚡ 阶段工作流」和「✨ Prompt 精炼」，两种模式共享同一会话上下文
 
 ## 可用命令
 
@@ -96,7 +102,7 @@ Promptor 的标准工作流遵循 Boris-style vibe coding 流程：
 
 辅助阶段：Requirement（需求整理）、Discussion（方案讨论）、Solidify（经验沉淀）
 
-辅以会话级 **Prompt 精炼** 能力：在任何阶段都可以切换到精炼模式，利用当前会话的对话历史、固定事实、上传文件和滚动摘要，把粗糙 prompt 转化为高质量结构化 prompt。
+与工作流并列的是 Session 级 **Prompt 精炼**：随时切换到精炼模式，利用整个会话的对话历史、固定事实、上传文件和滚动摘要，把粗糙 prompt 转化为高质量结构化 prompt。可选关联某个阶段来偏向特定需求，但记忆来源始终是整个 Session。
 
 核心原则：**Promptor 生成 prompt，用户复制给外部 agent 执行。Promptor 不直接执行任务。**
 

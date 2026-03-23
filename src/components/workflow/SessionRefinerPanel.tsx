@@ -1,9 +1,11 @@
-import { useState, useCallback } from 'react';
-import type { OutputLanguage, Session, Settings, PinnedFact, WorkflowFile, Message } from '@/types/data';
+import { useState, useCallback, useMemo } from 'react';
+import type { OutputLanguage, Session, Settings, PinnedFact, WorkflowFile, Message, WorkflowStage } from '@/types/data';
+import { WORKFLOW_STAGES } from '@/types/data';
 import type { PromptVariant } from '@/types/prompt';
 import type { ChatMessage } from '@/types/llm';
-import { composeContext, getTemplate } from '@/lib/prompts';
+import { composeContext } from '@/lib/prompts';
 import { sendChatCompletionStream, type LLMClientConfig } from '@/lib/llm';
+import { getStageConfig } from '@/lib/workflow';
 import { parseTuningOutput } from '@/lib/workflow';
 import type { TuningResult } from '@/lib/workflow';
 import { cn } from '@/lib/utils';
@@ -14,7 +16,7 @@ interface SessionRefinerPanelProps {
   lang: OutputLanguage;
   pinnedFacts: PinnedFact[];
   workflowFiles: WorkflowFile[];
-  recentMessages: Message[];
+  allMessages: Message[];
   rollingSummary?: string;
 }
 
@@ -24,19 +26,29 @@ export function SessionRefinerPanel({
   lang,
   pinnedFacts,
   workflowFiles,
-  recentMessages,
+  allMessages,
   rollingSummary,
 }: SessionRefinerPanelProps) {
   const [rawPrompt, setRawPrompt] = useState('');
   const [variant, setVariant] = useState<PromptVariant>('standard');
+  const [stageBias, setStageBias] = useState<WorkflowStage | ''>('');
   const [streaming, setStreaming] = useState(false);
   const [streamPhase, setStreamPhase] = useState<'idle' | 'streaming' | 'finalizing'>('idle');
   const [streamContent, setStreamContent] = useState('');
   const [error, setError] = useState('');
   const [result, setResult] = useState<TuningResult | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
 
   const isConfigured = settings.baseUrl && settings.apiKey && settings.model;
+
+  const sessionStats = useMemo(() => {
+    const stagesUsed = new Set(allMessages.map((m) => m.stage));
+    return {
+      totalMessages: allMessages.length,
+      stagesUsed: stagesUsed.size,
+    };
+  }, [allMessages]);
 
   function copy(text: string, key: string) {
     navigator.clipboard.writeText(text);
@@ -54,10 +66,22 @@ export function SessionRefinerPanel({
     setResult(null);
 
     try {
-      const recentChatMsgs: ChatMessage[] = recentMessages.slice(-8).map((m) => ({
+      const recentChatMsgs: ChatMessage[] = allMessages.slice(-12).map((m) => ({
         role: m.role as 'user' | 'assistant',
         content: m.content,
       }));
+
+      const templateInputs: Record<string, string> = {
+        rawPrompt,
+        taskType: session.taskType,
+        mode: variant,
+      };
+      if (stageBias) {
+        const biasConfig = getStageConfig(stageBias);
+        templateInputs.stageBias = stageBias;
+        templateInputs.stageBiasLabel = biasConfig.label;
+        templateInputs.stageBiasDeliverable = biasConfig.deliverable;
+      }
 
       const composed = composeContext({
         templateId: 'task:prompt_refinement',
@@ -69,12 +93,10 @@ export function SessionRefinerPanel({
         stageArtifacts: [],
         recentMessages: recentChatMsgs,
         workflowFiles,
-        rollingSummary: rollingSummary ? { id: '', sessionId: session.id, summaryType: 'rolling', content: rollingSummary, sourceRange: '', createdAt: '' } : undefined,
-        templateInputs: {
-          rawPrompt,
-          taskType: session.taskType,
-          mode: variant,
-        },
+        rollingSummary: rollingSummary
+          ? { id: '', sessionId: session.id, summaryType: 'rolling', content: rollingSummary, sourceRange: '', createdAt: '' }
+          : undefined,
+        templateInputs,
       });
 
       const config: LLMClientConfig = {
@@ -104,14 +126,18 @@ export function SessionRefinerPanel({
 
       setStreamPhase('finalizing');
       const parsed = parseTuningOutput(fullContent);
-      setResult(parsed.hasStructuredOutput ? parsed : {
-        finalPrompt: fullContent,
-        cheaperVariant: null,
-        diagnosis: null,
-        assumptionsAdded: null,
-        suggestedPinnedFacts: null,
-        hasStructuredOutput: false,
-      });
+      setResult(
+        parsed.hasStructuredOutput
+          ? parsed
+          : {
+              finalPrompt: fullContent,
+              cheaperVariant: null,
+              diagnosis: null,
+              assumptionsAdded: null,
+              suggestedPinnedFacts: null,
+              hasStructuredOutput: false,
+            },
+      );
       setStreamContent('');
     } catch (e) {
       if (e instanceof DOMException && e.name === 'AbortError') return;
@@ -120,33 +146,39 @@ export function SessionRefinerPanel({
       setStreaming(false);
       setStreamPhase('idle');
     }
-  }, [rawPrompt, variant, lang, session, settings, pinnedFacts, workflowFiles, recentMessages, rollingSummary, isConfigured, streaming]);
+  }, [rawPrompt, variant, stageBias, lang, session, settings, pinnedFacts, workflowFiles, allMessages, rollingSummary, isConfigured, streaming]);
 
-  const [showDiagnostics, setShowDiagnostics] = useState(false);
   const hasDiagnostics = result && (result.diagnosis || result.assumptionsAdded || result.suggestedPinnedFacts);
 
   return (
     <div className="flex flex-col">
-      {/* Header */}
+      {/* Session-level header */}
       <div className="px-4 py-3">
         <h3 className="text-sm font-semibold">
           {lang === 'zh' ? 'Prompt 精炼' : 'Prompt Refiner'}
         </h3>
-        <p className="mt-0.5 text-xs text-muted-foreground">
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
           {lang === 'zh'
-            ? '基于当前会话的上下文、记忆和文件，把粗糙的 prompt 转化为高质量结构化 prompt。'
-            : 'Transform a rough prompt into a structured, high-quality one using this session\'s context, memory, and files.'}
+            ? 'Prompt 精炼会结合当前 Session 中的历史对话、上传文件、关键记忆和已确认约束，生成更适合当前语境的高质量 prompt。'
+            : 'Prompt Refiner uses the entire session context — dialogue history, uploaded files, pinned facts, and accepted constraints — to generate a high-quality, context-aware prompt.'}
         </p>
       </div>
 
-      {/* Context indicators */}
+      {/* Session-level context indicators */}
       <div className="flex flex-wrap items-center gap-2 border-y border-border bg-muted/20 px-4 py-2 text-[11px] text-muted-foreground">
         <span className="font-medium">
-          {lang === 'zh' ? '上下文：' : 'Context: '}
+          {lang === 'zh' ? '会话上下文：' : 'Session context: '}
         </span>
-        <span className="rounded bg-muted px-1.5 py-0.5">
-          {lang === 'zh' ? `阶段: ${session.currentStage}` : `Stage: ${session.currentStage}`}
-        </span>
+        {sessionStats.totalMessages > 0 && (
+          <span className="rounded bg-muted px-1.5 py-0.5">
+            {sessionStats.totalMessages} {lang === 'zh' ? '条对话' : 'messages'}
+          </span>
+        )}
+        {sessionStats.stagesUsed > 0 && (
+          <span className="rounded bg-muted px-1.5 py-0.5">
+            {sessionStats.stagesUsed} {lang === 'zh' ? '个阶段' : 'stages'}
+          </span>
+        )}
         {pinnedFacts.length > 0 && (
           <span className="rounded bg-primary/10 px-1.5 py-0.5 text-primary">
             {pinnedFacts.length} {lang === 'zh' ? '条记忆' : 'facts'}
@@ -157,14 +189,14 @@ export function SessionRefinerPanel({
             {workflowFiles.length} {lang === 'zh' ? '个文件' : 'files'}
           </span>
         )}
-        {recentMessages.length > 0 && (
+        {rollingSummary && (
           <span className="rounded bg-muted px-1.5 py-0.5">
-            {recentMessages.length} {lang === 'zh' ? '条对话' : 'messages'}
+            {lang === 'zh' ? '有滚动摘要' : 'summary'}
           </span>
         )}
       </div>
 
-      {/* Input */}
+      {/* Input area */}
       <div className="space-y-3 px-4 py-3">
         <div>
           <label className="mb-1 block text-xs font-medium">
@@ -175,15 +207,15 @@ export function SessionRefinerPanel({
             onChange={(e) => setRawPrompt(e.target.value)}
             placeholder={
               lang === 'zh'
-                ? '粘贴你的粗糙 prompt，系统会结合当前会话上下文进行精炼...'
-                : 'Paste your rough prompt — it will be refined using this session\'s context...'
+                ? '粘贴你的粗糙 prompt，系统会结合整个会话上下文进行精炼...'
+                : 'Paste your rough prompt — it will be refined using the full session context...'
             }
             rows={5}
             className="input-field w-full resize-y"
           />
         </div>
 
-        <div className="flex items-end gap-3">
+        <div className="flex flex-wrap items-end gap-3">
           <div>
             <label className="mb-1 block text-[10px] text-muted-foreground">
               {lang === 'zh' ? '变体' : 'Variant'}
@@ -200,6 +232,27 @@ export function SessionRefinerPanel({
             </select>
           </div>
 
+          <div>
+            <label className="mb-1 block text-[10px] text-muted-foreground">
+              {lang === 'zh' ? '关联阶段（可选）' : 'Stage bias (optional)'}
+            </label>
+            <select
+              value={stageBias}
+              onChange={(e) => setStageBias(e.target.value as WorkflowStage | '')}
+              className="input-field text-xs"
+            >
+              <option value="">{lang === 'zh' ? '无' : 'None'}</option>
+              {WORKFLOW_STAGES.map((s) => {
+                const cfg = getStageConfig(s);
+                return (
+                  <option key={s} value={s}>
+                    {cfg.label}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+
           <button
             onClick={refine}
             disabled={streaming || !rawPrompt.trim() || !isConfigured}
@@ -209,14 +262,20 @@ export function SessionRefinerPanel({
           </button>
         </div>
 
+        {stageBias && (
+          <p className="text-[11px] text-muted-foreground">
+            {lang === 'zh'
+              ? `精炼结果将偏向 ${getStageConfig(stageBias).label} 阶段的要求，但仍然使用整个会话的上下文。`
+              : `Refinement will be biased toward ${getStageConfig(stageBias).label} stage requirements, but still uses the full session context.`}
+          </p>
+        )}
+
         {!isConfigured && (
           <p className="text-xs text-warning">
             {lang === 'zh' ? '请先在 Settings 中配置 LLM provider。' : 'Configure LLM provider in Settings first.'}
           </p>
         )}
-        {error && (
-          <p className="text-xs text-destructive">{error}</p>
-        )}
+        {error && <p className="text-xs text-destructive">{error}</p>}
       </div>
 
       {/* Streaming preview */}
@@ -225,8 +284,8 @@ export function SessionRefinerPanel({
           <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
             <div className="h-2 w-2 animate-pulse rounded-full bg-primary" />
             {streamPhase === 'streaming'
-              ? (lang === 'zh' ? '精炼中...' : 'Refining...')
-              : (lang === 'zh' ? '处理中...' : 'Finalizing...')}
+              ? lang === 'zh' ? '精炼中...' : 'Refining...'
+              : lang === 'zh' ? '处理中...' : 'Finalizing...'}
           </div>
           {streamContent && (
             <pre className="whitespace-pre-wrap rounded bg-muted/30 p-3 text-xs">{streamContent}</pre>
@@ -237,7 +296,6 @@ export function SessionRefinerPanel({
       {/* Results */}
       {result && !streaming && (
         <div className="space-y-3 border-t border-border px-4 py-3">
-          {/* Primary: Refined Prompt */}
           {result.finalPrompt && (
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
@@ -257,7 +315,6 @@ export function SessionRefinerPanel({
             </div>
           )}
 
-          {/* Secondary: Cheaper Variant */}
           {result.cheaperVariant && (
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
@@ -277,7 +334,6 @@ export function SessionRefinerPanel({
             </div>
           )}
 
-          {/* Tertiary: Diagnostics (collapsed) */}
           {hasDiagnostics && (
             <div className="border-t border-border pt-2">
               <button

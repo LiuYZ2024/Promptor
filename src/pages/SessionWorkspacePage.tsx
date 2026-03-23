@@ -347,56 +347,7 @@ export function SessionWorkspacePage() {
     <div className="flex h-full">
       {/* Main Panel */}
       <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Stage Progress Bar */}
-        <div className="border-b border-border px-4 py-2">
-          <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-            {lang === 'zh' ? '核心流程' : 'Primary Flow'}
-          </div>
-          <div className="flex items-center gap-1 overflow-x-auto">
-            {PRIMARY_STAGES.map((stage) => {
-              const completed = session.completedStages.includes(stage);
-              const current = stage === session.currentStage;
-              const cfg = getStageConfig(stage);
-              return (
-                <button
-                  key={stage}
-                  onClick={() => handleStageClick(stage)}
-                  className={cn(
-                    'shrink-0 rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
-                    current && 'bg-primary text-primary-foreground',
-                    completed && !current && 'bg-success/10 text-success',
-                    !completed && !current && 'text-muted-foreground hover:bg-muted',
-                  )}
-                >
-                  {completed ? '✓' : current ? '●' : '○'} {cfg.label}
-                </button>
-              );
-            })}
-          </div>
-          <div className="mt-1 flex items-center gap-1">
-            <span className="text-[10px] text-muted-foreground/50">
-              {lang === 'zh' ? '辅助：' : 'Support: '}
-            </span>
-            {SUPPORTING_STAGES.map((stage) => {
-              const current = stage === session.currentStage;
-              const cfg = getStageConfig(stage);
-              return (
-                <button
-                  key={stage}
-                  onClick={() => handleStageClick(stage)}
-                  className={cn(
-                    'shrink-0 rounded px-1.5 py-0.5 text-[10px] transition-colors',
-                    current ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground/50 hover:text-muted-foreground',
-                  )}
-                >
-                  {cfg.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Session Title + View Switcher + Actions */}
+        {/* Session Title + Actions */}
         <div className="border-b border-border px-4 py-3">
           <div className="flex items-center justify-between">
             <input
@@ -407,12 +358,14 @@ export function SessionWorkspacePage() {
               placeholder="Session title..."
             />
             <div className="flex shrink-0 gap-2 pl-3">
-              <button
-                onClick={handleSaveArtifact}
-                className="rounded-md border border-border px-3 py-1 text-xs hover:bg-muted"
-              >
-                Save Artifact
-              </button>
+              {sessionView === 'workflow' && (
+                <button
+                  onClick={handleSaveArtifact}
+                  className="rounded-md border border-border px-3 py-1 text-xs hover:bg-muted"
+                >
+                  Save Artifact
+                </button>
+              )}
               {canAdvance && sessionView === 'workflow' && (
                 <button
                   onClick={handleAdvanceStage}
@@ -426,38 +379,87 @@ export function SessionWorkspacePage() {
           {session.goal && (
             <p className="mt-0.5 text-xs text-muted-foreground">{session.goal}</p>
           )}
+        </div>
 
-          {/* View mode switcher */}
-          <div className="mt-2 flex items-center gap-1">
-            <button
-              onClick={() => setSessionView('workflow')}
-              className={cn(
-                'rounded-md px-3 py-1 text-xs font-medium transition-colors',
-                sessionView === 'workflow'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-              )}
-            >
-              {lang === 'zh' ? '⚡ 阶段工作流' : '⚡ Stage Workflow'}
-            </button>
-            <button
-              onClick={() => setSessionView('refiner')}
-              className={cn(
-                'rounded-md px-3 py-1 text-xs font-medium transition-colors',
-                sessionView === 'refiner'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-              )}
-            >
-              {lang === 'zh' ? '✨ Prompt 精炼' : '✨ Prompt Refiner'}
-            </button>
-          </div>
+        {/* Primary session-level view switcher */}
+        <div className="flex items-center gap-1 border-b border-border px-4 py-2">
+          <button
+            onClick={() => setSessionView('workflow')}
+            className={cn(
+              'rounded-md px-3.5 py-1.5 text-xs font-medium transition-colors',
+              sessionView === 'workflow'
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+            )}
+          >
+            {lang === 'zh' ? '⚡ 阶段工作流' : '⚡ Stage Workflow'}
+          </button>
+          <button
+            onClick={() => setSessionView('refiner')}
+            className={cn(
+              'rounded-md px-3.5 py-1.5 text-xs font-medium transition-colors',
+              sessionView === 'refiner'
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+            )}
+          >
+            {lang === 'zh' ? '✨ Prompt 精炼' : '✨ Prompt Refiner'}
+          </button>
         </div>
 
         {/* Main content area — switches between Workflow and Refiner */}
         <div className="flex-1 overflow-y-auto">
           {sessionView === 'workflow' ? (
             <>
+              {/* Stage Progress Bar — only visible in workflow mode */}
+              <div className="border-b border-border px-4 py-2">
+                <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                  {lang === 'zh' ? '核心流程' : 'Primary Flow'}
+                </div>
+                <div className="flex items-center gap-1 overflow-x-auto">
+                  {PRIMARY_STAGES.map((stage) => {
+                    const completed = session.completedStages.includes(stage);
+                    const current = stage === session.currentStage;
+                    const cfg = getStageConfig(stage);
+                    return (
+                      <button
+                        key={stage}
+                        onClick={() => handleStageClick(stage)}
+                        className={cn(
+                          'shrink-0 rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
+                          current && 'bg-primary text-primary-foreground',
+                          completed && !current && 'bg-success/10 text-success',
+                          !completed && !current && 'text-muted-foreground hover:bg-muted',
+                        )}
+                      >
+                        {completed ? '✓' : current ? '●' : '○'} {cfg.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="mt-1 flex items-center gap-1">
+                  <span className="text-[10px] text-muted-foreground/50">
+                    {lang === 'zh' ? '辅助：' : 'Support: '}
+                  </span>
+                  {SUPPORTING_STAGES.map((stage) => {
+                    const current = stage === session.currentStage;
+                    const cfg = getStageConfig(stage);
+                    return (
+                      <button
+                        key={stage}
+                        onClick={() => handleStageClick(stage)}
+                        className={cn(
+                          'shrink-0 rounded px-1.5 py-0.5 text-[10px] transition-colors',
+                          current ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground/50 hover:text-muted-foreground',
+                        )}
+                      >
+                        {cfg.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {currentConfig && (
                 <StageWorkArea
                   config={currentConfig}
@@ -511,7 +513,7 @@ export function SessionWorkspacePage() {
               lang={lang}
               pinnedFacts={pinnedFacts}
               workflowFiles={workflowFiles}
-              recentMessages={messages.slice(-20)}
+              allMessages={messages}
               rollingSummary={rollingSummaryText}
             />
           )}
