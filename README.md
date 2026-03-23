@@ -4,6 +4,12 @@ Promptor 是一个本地运行的 Prompt 编排与管理工具，面向使用 Cu
 
 它不是聊天工具，也不是简单的 prompt 润色器。它是一个 **Prompt Operating System**：把模糊需求转换成高质量的结构化 prompt、阶段化 workflow、上下文摘要和记忆状态，减少 token 浪费，提高 agent 产出质量。
 
+⭐点击左下角 Refiner 进行单独prompt加工
+⭐点击创建新 Session，使用阶段化工作流编程
+
+<video src="refine.mp4" width="600" controls>
+</video>
+
 ## 核心特性
 
 - **阶段化工作流** — 固定 8 阶段流程（Research → Plan → Annotation Loop → Implement → Verify + 辅助阶段），每个阶段有明确的产物文件和不可变要求
@@ -26,8 +32,8 @@ Promptor 是一个本地运行的 Prompt 编排与管理工具，面向使用 Cu
 
 ```bash
 # 克隆仓库
-git clone https://github.com/<your-username>/promptor-v1.git
-cd promptor-v1
+git clone https://github.com/LiuYZ2024/Promptor.git
+cd Promptor
 
 # 安装依赖
 npm install
