@@ -25,6 +25,7 @@ import {
   enforceImmutableRequirements,
 } from '@/lib/workflow';
 import { StageWorkArea } from '@/components/workflow/StageWorkArea';
+import { SessionRefinerPanel } from '@/components/workflow/SessionRefinerPanel';
 import { FileUploadPanel } from '@/components/workflow/FileUploadPanel';
 import { DiscussionPanel } from '@/components/session/DiscussionPanel';
 import type { WorkflowStage, Message } from '@/types/data';
@@ -32,6 +33,8 @@ import type { StageWorkMode } from '@/lib/workflow/stage-config';
 import type { PromptTemplateId } from '@/types/prompt';
 import type { ChatMessage } from '@/types/llm';
 import { WORKFLOW_STAGES } from '@/types/data';
+
+type SessionView = 'workflow' | 'refiner';
 
 export function SessionWorkspacePage() {
   const { id } = useParams<{ id: string }>();
@@ -44,6 +47,7 @@ export function SessionWorkspacePage() {
   const [streamContent, setStreamContent] = useState('');
   const [error, setError] = useState('');
   const [hasSentFirstMessage, setHasSentFirstMessage] = useState(false);
+  const [sessionView, setSessionView] = useState<SessionView>('workflow');
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -69,6 +73,19 @@ export function SessionWorkspacePage() {
     [id],
     [],
   );
+
+  const rollingSummaryRecord = useLiveQuery(
+    () =>
+      id
+        ? db.summaries
+            .where('sessionId')
+            .equals(id)
+            .filter((s) => s.summaryType === 'rolling')
+            .last()
+        : undefined,
+    [id],
+  );
+  const rollingSummaryText = rollingSummaryRecord?.content;
 
   const currentStageMessages = messages.filter(
     (m) => m.stage === session?.currentStage,
@@ -379,7 +396,7 @@ export function SessionWorkspacePage() {
           </div>
         </div>
 
-        {/* Session Title + Actions */}
+        {/* Session Title + View Switcher + Actions */}
         <div className="border-b border-border px-4 py-3">
           <div className="flex items-center justify-between">
             <input
@@ -396,7 +413,7 @@ export function SessionWorkspacePage() {
               >
                 Save Artifact
               </button>
-              {canAdvance && (
+              {canAdvance && sessionView === 'workflow' && (
                 <button
                   onClick={handleAdvanceStage}
                   className="rounded-md bg-primary px-3 py-1 text-xs text-primary-foreground hover:opacity-90"
@@ -409,55 +426,94 @@ export function SessionWorkspacePage() {
           {session.goal && (
             <p className="mt-0.5 text-xs text-muted-foreground">{session.goal}</p>
           )}
+
+          {/* View mode switcher */}
+          <div className="mt-2 flex items-center gap-1">
+            <button
+              onClick={() => setSessionView('workflow')}
+              className={cn(
+                'rounded-md px-3 py-1 text-xs font-medium transition-colors',
+                sessionView === 'workflow'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+              )}
+            >
+              {lang === 'zh' ? '⚡ 阶段工作流' : '⚡ Stage Workflow'}
+            </button>
+            <button
+              onClick={() => setSessionView('refiner')}
+              className={cn(
+                'rounded-md px-3 py-1 text-xs font-medium transition-colors',
+                sessionView === 'refiner'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+              )}
+            >
+              {lang === 'zh' ? '✨ Prompt 精炼' : '✨ Prompt Refiner'}
+            </button>
+          </div>
         </div>
 
-        {/* Stage Work Area (two-mode) */}
+        {/* Main content area — switches between Workflow and Refiner */}
         <div className="flex-1 overflow-y-auto">
-          {currentConfig && (
-            <StageWorkArea
-              config={currentConfig}
-              lang={lang}
+          {sessionView === 'workflow' ? (
+            <>
+              {currentConfig && (
+                <StageWorkArea
+                  config={currentConfig}
+                  lang={lang}
+                  session={session}
+                  settings={settings}
+                  workflowFiles={workflowFiles}
+                  pinnedFacts={pinnedFacts}
+                  stageMessages={currentStageMessages}
+                  rollingSummary={rollingSummaryText}
+                  streaming={streaming}
+                  streamPhase={streamPhase}
+                  streamContent={streamContent}
+                  error={error}
+                  onSend={send}
+                  onAbort={() => abortRef.current?.abort()}
+                  onCopyPrompt={() => {}}
+                />
+              )}
+
+              {currentStageArtifacts.length > 0 && (
+                <div className="border-t border-border px-4 py-2">
+                  <div className="text-xs font-medium uppercase text-muted-foreground">
+                    Artifacts ({currentStageArtifacts.length})
+                  </div>
+                  <div className="mt-1 space-y-1">
+                    {currentStageArtifacts.map((a) => (
+                      <details key={a.id} className="text-sm">
+                        <summary className="cursor-pointer text-xs hover:text-foreground">
+                          {a.artifactType} v{a.version} — {a.title}
+                        </summary>
+                        <pre className="mt-1 whitespace-pre-wrap rounded bg-muted/50 p-2 text-xs">
+                          {a.content}
+                        </pre>
+                      </details>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {session.currentStage === 'discussion' && (
+                <div className="border-t border-border px-4 py-3">
+                  <DiscussionPanel sessionId={id!} />
+                </div>
+              )}
+            </>
+          ) : (
+            <SessionRefinerPanel
               session={session}
               settings={settings}
-              workflowFiles={workflowFiles}
+              lang={lang}
               pinnedFacts={pinnedFacts}
-              stageMessages={currentStageMessages}
-              streaming={streaming}
-              streamPhase={streamPhase}
-              streamContent={streamContent}
-              error={error}
-              onSend={send}
-              onAbort={() => abortRef.current?.abort()}
-              onCopyPrompt={() => {}}
+              workflowFiles={workflowFiles}
+              recentMessages={messages.slice(-20)}
+              rollingSummary={rollingSummaryText}
             />
-          )}
-
-          {/* Stage Artifacts */}
-          {currentStageArtifacts.length > 0 && (
-            <div className="border-t border-border px-4 py-2">
-              <div className="text-xs font-medium uppercase text-muted-foreground">
-                Artifacts ({currentStageArtifacts.length})
-              </div>
-              <div className="mt-1 space-y-1">
-                {currentStageArtifacts.map((a) => (
-                  <details key={a.id} className="text-sm">
-                    <summary className="cursor-pointer text-xs hover:text-foreground">
-                      {a.artifactType} v{a.version} — {a.title}
-                    </summary>
-                    <pre className="mt-1 whitespace-pre-wrap rounded bg-muted/50 p-2 text-xs">
-                      {a.content}
-                    </pre>
-                  </details>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Discussion Panel (only in discussion stage) */}
-          {session.currentStage === 'discussion' && (
-            <div className="border-t border-border px-4 py-3">
-              <DiscussionPanel sessionId={id!} />
-            </div>
           )}
         </div>
       </div>

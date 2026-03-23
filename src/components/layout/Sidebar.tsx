@@ -11,7 +11,6 @@ interface SidebarProps {
 
 const NAV_ITEMS = [
   { to: '/workflow', label: 'Workflow', icon: '⚡' },
-  { to: '/refiner', label: 'Refiner', icon: '✨' },
   { to: '/settings', label: 'Settings', icon: '⚙' },
 ];
 

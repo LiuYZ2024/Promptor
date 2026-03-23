@@ -32,5 +32,7 @@ desktop.ini
 .cursor/
 
 # Video / large assets (not for version control)
+*.mp4
 *.mov
 *.avi
+*.gif

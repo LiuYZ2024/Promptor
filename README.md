@@ -4,11 +4,10 @@ Promptor 是一个本地运行的 Prompt 编排与管理工具，面向使用 Cu
 
 它不是聊天工具，也不是简单的 prompt 润色器。它是一个 **Prompt Operating System**：把模糊需求转换成高质量的结构化 prompt、阶段化 workflow、上下文摘要和记忆状态，减少 token 浪费，提高 agent 产出质量。
 
-⭐点击左下角 Refiner 进行单独prompt加工
-⭐点击创建新 Session，使用阶段化工作流编程
+每个 Session 提供两大核心能力：
+- **阶段工作流** — 按 Research → Plan → Annotation → Implement → Verify 流程生成高质量 prompt
+- **Prompt 精炼** — 基于当前会话的记忆、文件和上下文，把粗糙 prompt 转化为结构化 prompt
 
-<video src="refine.mp4" width="600" controls>
-</video>
 
 ## 核心特性
 
@@ -17,6 +16,7 @@ Promptor 是一个本地运行的 Prompt 编排与管理工具，面向使用 Cu
 - **Base-preserving 优化** — 优化 prompt 时保留阶段基础模板的核心要求，仅做聚焦和上下文增强，不做自由重写
 - **文件驱动** — 上传 research.md / plan.md / test-report.md 等阶段产物文件，自动纳入 prompt 生成上下文
 - **两模式工作区** — 每个阶段提供「优化 Prompt」和「审阅阶段文件」两种工作模式
+- **会话级 Prompt 精炼** — Prompt Refiner 与工作流共享同一会话的记忆、文件和上下文，不是孤立功能
 - **记忆系统** — 4 层记忆（Raw History / Rolling Summary / Pinned Facts / Stage Artifacts），支持上下文压缩
 - **弱模型兼容** — 所有模板为低能力模型优化，输出结构固定、校验修复自动化
 - **本地优先** — 无后端，数据存储在浏览器 IndexedDB，API key 不离开本地
@@ -50,7 +50,7 @@ npm run dev
 2. 选择 Provider Preset（OpenAI / DeepSeek / GLM / Gemini / Custom）
 3. 填入 API Key
 4. 点击 Test Connection 验证连接
-5. ⭐回到主页创建新 Session，按阶段流程开始使用，或者点击左下角的 Refiner 进行单独prompt加工
+5. 回到主页创建新 Session，进入统一工作区。在工作区中切换「阶段工作流」和「Prompt 精炼」两种模式
 
 ## 可用命令
 
@@ -70,7 +70,7 @@ src/
 ├── components/       # UI 组件
 │   ├── layout/       # Sidebar、DbProvider
 │   ├── session/      # DiscussionPanel
-│   └── workflow/     # StageWorkArea、StageCard、FileUploadPanel、NewSessionModal
+│   └── workflow/     # StageWorkArea、SessionRefinerPanel、StageCard、FileUploadPanel、NewSessionModal
 ├── hooks/            # React Hooks（sessions、settings、workflowFiles）
 ├── lib/
 │   ├── llm/          # LLM client abstraction（streaming、error handling）
@@ -79,7 +79,7 @@ src/
 │   ├── token-estimation/
 │   ├── utils/
 │   └── workflow/     # 阶段配置、优化 prompt 构建、tuning parser
-├── pages/            # 页面（Session、Settings、Workflow、Refiner）
+├── pages/            # 页面（Session、Settings、Workflow）
 └── types/            # TypeScript 类型定义
 tests/                # Vitest 单元测试（448 tests）
 ```
@@ -96,5 +96,7 @@ Promptor 的标准工作流遵循 Boris-style vibe coding 流程：
 
 辅助阶段：Requirement（需求整理）、Discussion（方案讨论）、Solidify（经验沉淀）
 
-每个阶段的核心原则：**Promptor 生成 prompt，用户复制给外部 agent 执行。Promptor 不直接执行任务。**
+辅以会话级 **Prompt 精炼** 能力：在任何阶段都可以切换到精炼模式，利用当前会话的对话历史、固定事实、上传文件和滚动摘要，把粗糙 prompt 转化为高质量结构化 prompt。
+
+核心原则：**Promptor 生成 prompt，用户复制给外部 agent 执行。Promptor 不直接执行任务。**
 

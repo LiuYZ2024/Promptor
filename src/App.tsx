@@ -4,7 +4,6 @@ import { DbProvider } from '@/components/DbProvider';
 import { RootRedirect } from '@/pages/RootRedirect';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { WorkflowBuilderPage } from '@/pages/WorkflowBuilderPage';
-import { PromptRefinerPage } from '@/pages/PromptRefinerPage';
 import { SessionWorkspacePage } from '@/pages/SessionWorkspacePage';
 
 export function App() {
@@ -15,7 +14,6 @@ export function App() {
           <Route element={<AppShell />}>
             <Route path="/" element={<RootRedirect />} />
             <Route path="/workflow" element={<WorkflowBuilderPage />} />
-            <Route path="/refiner" element={<PromptRefinerPage />} />
             <Route path="/session/:id" element={<SessionWorkspacePage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
