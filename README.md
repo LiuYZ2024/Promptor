@@ -49,7 +49,7 @@ npm run dev
 
 浏览器打开 `http://localhost:5173` 即可使用。
 
-### 首次使用
+### 首次使用（参考左下角“使用文档”）
 
 1. 进入 **Settings** 页面
 2. 选择 Provider Preset（OpenAI / DeepSeek / GLM / Gemini / Custom）
